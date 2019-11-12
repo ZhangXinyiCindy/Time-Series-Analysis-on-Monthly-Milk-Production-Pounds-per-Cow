@@ -1,0 +1,220 @@
+---
+title: "STAT4601 Monthly Milk Production (Pounds/Cow)"
+author: "Zhang Xinyi (UID:3035234571)"
+date: "2018/12/5"
+output: 
+  html_document: 
+    fig_height: 4
+    fig_width: 6.5
+    number_sections: yes
+---
+
+```{r setup, include=F}
+library(ggplot2)
+library(tseries)
+library(forecast)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Background 
+The data are downloaded from the website [datamarket.com](https://datamarket.com/data/set/22ox/monthly-milk-production-pounds-per-cow-jan-62-dec-75#!ds=22ox&display=line). It described the monthly milk production in pounds per cow from January 1962 to December 1975. There are 168 observations in total which were stored in the data frame Cow. The latest 5 observations are removed for forecasting comparison. The removed data were stored in the data frame cow, which contains 163 observations that n is still larger than 100. Milk is an important nutrition source of protein and calcium for human beings. It also serves as the raw material for all dairy products like cheese and yogurt. However, fresh milk has the problem of short shelf life that is costly to preserve. The result from quantitative analysis might be helpful for the manufacturer to cope with the massive demand and reduce the storage cost.
+
+```{r include=FALSE}
+Cow<-read.csv("/Users/zhangxinyi/Downloads/monthly-milk-production-pounds-p.csv", 
+                  header = TRUE)
+Nfive=length(Cow$Month)-5
+
+colnames(Cow)[2] <-"Pound"
+cow <- Cow[1:Nfive,]
+summary(cow)
+```
+ 
+ \newpage
+ 
+#Time plot
+```{r}
+plot(cow$Pound, type="l",lwd=1.5, xlab="Time",ylab="Pounds per cow")
+```
+
+As the time plot shows, the data shows a clear seasonal effect. The mean does not looks like to be constant while the variance seems stay the same. It suggest the possibility of taking difference of the initial data and seasonal differencing.
+
+#Stationarity
+```{r}
+acf(cow$Pound, lag.max=100)
+pacf(cow$Pound, lag.max=100)
+```
+
+By looking at sample ACF of the original data, we can observe that the time series has slowly decreasing ACF pattern, so it is non-stationary. Thus, data transformation is needed.
+
+#Transformation
+##Differencing at lag 1
+```{r}
+diff1 <- diff(cow$Pound)
+plot(diff1, type = "l", main = "Time Plot (difference=1)")
+```
+
+Firstly, we difference the original data at lag 1. The plot shows a nearly constant mean with clear seasonal pattern. 
+```{r}
+acf(diff1, lag.max=100, main = "ACF for First Diff (nlags=100)")
+pacf(diff1, lag.max=100, main = "PACF for First Diff (nlags=100)")
+```
+
+The ACF also shows a clear seasonal pattern, which suggested further seasonal differencing.
+
+##Seasonal differencing
+```{r}
+seasonal<-diff(diff1, lag = 12, differences = 1)
+plot(seasonal, type = "l", main="Time Plot (seasonal differencing at 1)")
+```
+
+The plot shows that the mean and variance are approximately constant after first differencing and seasonal differencing. 
+```{r}
+acf(seasonal, lag.max=50, main="ACF Plot (seasonal differencing at 1)")
+```
+
+The sample ACF decays rapidly that suggest stationarity. 
+```{r}
+adf.test(seasonal, alternative=c("stationary"))
+adf.test(seasonal, alternative=c("stationary"),k=12)
+adf.test(seasonal, alternative=c("stationary"),k=24)
+```
+
+Augumented-Dickey-Fuller test was conducted in multiple Ks(5 as default,12,24). P-values are all smaller than 0.05, we can conclude that the data is stationary.
+
+#Model Specification
+Only  ACF at lag0, lag 1, lag 12 and lag 13 is significant. ARIMA(0,1,1)*(0,1,1) is proposed. Since the model is not pure seasonal model, we do not rely on PACF for model specification.
+
+#Model Estimation
+##Estimate the parameters by the maximum likelihood estimation method
+```{r}
+fit1<- arima(x=cow$Pound, order=c(0,1,1),
+             seasonal=list(order=c(0,1,1), period=12),method = ("ML"))
+fit1
+```
+
+##Residual Analysis
+```{r}
+plot(fit1$residuals, main = "ARIMA(0,1,1)x(0,1,1) Residuals")
+```
+
+```{r fig.width=5, fig.height=15}
+tsdiag(fit1)
+```
+
+No  significant pattern is observed in either the sample residual plot to residual ACF plot. The p-value plot for Ljung-Box test at different lags are all much higher than the boundary.
+
+```{r}
+#p-value of different K
+Box.test(fit1$residuals, lag = 1, type = "Ljung-Box", fitdf = 0)
+Box.test(fit1$residuals, lag = 6, type = "Ljung-Box", fitdf = 0)
+Box.test(fit1$residuals, lag = 12, type = "Ljung-Box", fitdf = 0)
+Box.test(fit1$residuals, lag = 24, type = "Ljung-Box", fitdf = 0)
+```
+
+Specifically, the p-value of Ljung-Box test at lag 1, 6, 12, 24 are 0.9132, 0.5655, 0.6537, 0.7982 respectively. 
+
+#Over Parameterized Method
+##ARIMA(0,1,1)*(0,1,4)
+Since the lag 48 ACF of seasonal differenced(difference=1) data is just on the boundary, ARIMA(0,1,1)*(0,1,4) is suggested for overfitting.
+
+```{r}
+#ARIMA(0,1,1)x(0,1,4)
+fit2<- arima(x=cow$Pound, order=c(0,1,1),
+             seasonal=list(order=c(0,1,4), period=12),method = ("ML"))
+fit2
+```
+
+The result shows that the variance estimate decreased by 5.29 and AIC decreased by 1.98. The estimated coefficient of SMA4 is 0.2828, with standard error of 0.1246, which suggested the coefficient is significantly different form zero.  ARIMA(0,1,1)*(0,1,4) seems to be a better model than ARIMA(0,1,1)*(0,1,1).
+
+```{r}
+#check whether adequate or not
+plot(fit2$residuals, main = "ARIMA(0,1,1)x(0,1,4) Residuals")
+```
+```{r fig.width=5, fig.height=15}
+tsdiag(fit2)
+```
+
+ARIMA(0,1,1)*(0,1,4) is adequate.
+
+##ARIMA(0,1,2)*(0,1,4)
+```{r}
+#ARIMA(0,1,2)x(0,1,4)
+fit3<- arima(x=cow$Pound, order=c(0,1,2),
+             seasonal=list(order=c(0,1,4), period=12),method = ("ML"))
+fit3
+```
+
+ARIMA(0,1,2)*(0,1,4) is fitted with a little decrease in variance estimation, but AIC increased compared to ARIMA(0,1,1)*(0,1,4).
+
+```{r}
+#check whether adequate or not
+plot(fit3$residuals, main = "ARIMA(0,1,2)x(0,1,4) Residuals")
+```
+```{r fig.width=5, fig.height=15}
+tsdiag(fit3)
+```
+
+ARIMA(0,1,2)x(0,1,4) is adequate.
+
+##ARIMA(0,1,2)*(0,1,1)
+```{r}
+#ARIMA(0,1,2)x(0,1,1)
+fit4<- arima(x=cow$Pound, order=c(0,1,2),
+             seasonal=list(order=c(0,1,1), period=12),method = ("ML"))
+fit4
+```
+
+ARIMA(0,1,2)*(0,1,1) is fitted with a little decrease in variance estimation compared to ARIMA(0,1,1)*(0,1,1), but AIC increased.
+
+```{r}
+#check whether adequate or not
+plot(fit4$residuals, main = "ARIMA(0,1,2)x(0,1,1) Residuals")
+```
+```{r fig.width=5, fig.height=15}
+tsdiag(fit4)
+```
+
+ARIMA(0,1,2)x(0,1,1) is adequate.
+
+#Model Selection
+```{r echo=FALSE}
+fit1
+fit2
+fit3
+fit4
+
+Model <-c("ARIMA(0,1,1)x(0,1,1)","ARIMA(0,1,1)x(0,1,4)","ARIMA(0,1,2)x(0,1,4)",
+     "ARIMA(0,1,2)x(0,1,1)")
+VarianceEstimated <- c(52.48, 47.19, 47.11,52.39)
+AIC <- c(1031.13, 1029.15, 1030.91, 1032.82)
+df <- data.frame(Model,VarianceEstimated,AIC)
+```
+
+```{r echo=FALSE}
+print(df)
+```
+
+According to the table, we choose ARIMA(0,1,1)x(0,1,4) which has the lowest AIC with reasonably low estimated Variance. However, ARIMA(0,1,1)x(0,1,1) might still be a reasonable alternative which is simpler and easier for interpretation.
+
+#Forecast
+Using the model ARIMA(0,1,1)x(0,1,4), we have the following forecast:
+```{r}
+q=forecast(fit2, h=5)
+q
+```
+
+Comparing with the real data in the last five period:
+```{r}
+Cow[164:168,]
+```
+
+The forecasting seems acceptable.
+
+#Insight
+From the analysis above, we can conclude that there is clear seasonal effect in milk production. The manufacturers should have production plan accordingly. The main milk buyers like milk powder producer should better plan their production accordingly to enjoy the benefit of low cost when milk production is high. There might be some biological reason like pregnancy and calf delivering could support the SMA(4). Further information is needed. 
+
+
+
+
+
