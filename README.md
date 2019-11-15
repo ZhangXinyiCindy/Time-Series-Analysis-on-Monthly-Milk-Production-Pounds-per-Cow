@@ -1,6 +1,7 @@
 # Time-Series-Analysis-on-Monthly-Milk-Production-Pounds-per-Cow
-Course project of "STAT4601 Time Series Analysis" that analysed the monthly milk production pattern using R
-# Background and Motivation
+Course project of "STAT4601 Time Series Analysis" that analysed the monthly milk production pattern using R.
+Please download [Report]Time Series Analysis on Monthly Milk Production.html for best display.
+# Background and Motivation.
 The data are downloaded from the website datamarket.com (https://datamarket.com/data/set/22ox/monthly-milk-production-pounds-per-cow-jan-62-dec- 75#!ds=22ox&display=line). It described the monthly milk production in pounds per cow from January 1962 to December 1975. There are 168 observations in total which were stored in the data frame Cow. The latest 5 observations are removed for forecasting comparison. The removed data were stored in the data frame cow, which contains 163 observations that n is still larger than 100. Milk is an important nutrition source of protein and calcium for human beings. It also serves as the raw material for all dairy products like cheese and yogurt. However, fresh milk has the problem of short shelf life that is costly to preserve. The result from quantitative analysis might be helpful for the manufacturer to cope with the massive demand and reduce the storage cost.
 # Conclusions
 A clear seasonal effect was observed in milk production. An ARIMA(0,1,1)x(0,1,4) model was suggested as the optimal model for describing the monthly milk production pattern. The forcasting results projected from this model provides an satisfying performance on the testing data.There might be some biological reason like pregnancy and calf delivering could support the SMA(4). Further information is needed.
